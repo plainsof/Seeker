@@ -13,6 +13,7 @@ import (
 	"testing/fstest"
 	"time"
 
+	"github.com/CZERTAINLY/Seeker/internal/cdxprops/cdxtest"
 	"github.com/CZERTAINLY/Seeker/internal/log"
 	"github.com/CZERTAINLY/Seeker/internal/model"
 	"github.com/CZERTAINLY/Seeker/internal/walk"
@@ -20,8 +21,6 @@ import (
 	"github.com/anchore/stereoscope"
 	"github.com/anchore/stereoscope/pkg/image"
 	"github.com/stretchr/testify/require"
-	"github.com/testcontainers/testcontainers-go"
-	"github.com/testcontainers/testcontainers-go/wait"
 )
 
 func TestFS(t *testing.T) {
@@ -147,32 +146,19 @@ RUN echo "this is a new layer, longer content is 42" > /a/c/c.txt
 	err = f.Sync()
 	require.NoError(t, err)
 
-	req := testcontainers.ContainerRequest{
-		FromDockerfile: testcontainers.FromDockerfile{
-			Context:    tempdir,
-			Dockerfile: "Dockerfile",
-		},
-		WaitingFor: wait.ForExit(),
-	}
-
-	c, err := testcontainers.GenericContainer(t.Context(), testcontainers.GenericContainerRequest{
-		ContainerRequest: req,
-		Started:          true,
-	})
-	require.NoError(t, err)
-
-	info, err := c.Inspect(t.Context())
+	path := filepath.Join(tempdir, "Dockerfile")
+	c, err := cdxtest.NewContainer(t.Context(), path)
 	require.NoError(t, err)
 
 	t.Cleanup(func() {
-		err = c.Terminate(context.Background())
+		err := c.Cleanup(context.Background())
 		require.NoError(t, err)
 	})
 
 	t.Run("walk.Image", func(t *testing.T) {
 		ociImage, err := stereoscope.GetImageFromSource(
 			t.Context(),
-			info.Image,
+			c.ImageID(),
 			image.DockerDaemonSource,
 			nil,
 		)
@@ -213,7 +199,7 @@ RUN echo "this is a new layer, longer content is 42" > /a/c/c.txt
 				{
 					Host: host,
 					Images: []string{
-						info.Image,
+						c.ImageID(),
 					},
 				},
 			},
